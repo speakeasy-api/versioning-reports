@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/speakeasy-api/sdk-gen-config/versioning"
+	"github.com/speakeasy-api/versioning-reports/versioning"
 )
 
 func main() {
