@@ -74,8 +74,9 @@ func TestGetMergedVersionReport(t *testing.T) {
 func TestWithVersionReportCapture(t *testing.T) {
 	ctx := context.Background()
 
-	report, err := WithVersionReportCapture(ctx, func(ctx context.Context) error {
-		return AddVersionReport(ctx, VersionReport{
+	type unknown struct {}
+	report, _, err := WithVersionReportCapture[unknown](ctx, func(ctx context.Context) (*unknown, error) {
+		return nil, AddVersionReport(ctx, VersionReport{
 			Key:          "test",
 			Priority:     1,
 			MustGenerate: true,

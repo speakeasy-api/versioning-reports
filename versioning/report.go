@@ -115,29 +115,30 @@ func getMergedVersionReport() (*MergedVersionReport, error) {
 	return &MergedVersionReport{Reports: orderedReports}, nil
 }
 
-func WithVersionReportCapture(ctx context.Context, f func(ctx context.Context) error) (*MergedVersionReport, error) {
+func WithVersionReportCapture[T any](ctx context.Context, f func(ctx context.Context) (T, error)) (*MergedVersionReport, T, error) {
 	var tempFile *os.File
 	var err error
+	var result T
 
 	if len(os.Getenv(ENV_VAR_PREFIX)) == 0 {
 		tempFile, err = os.CreateTemp("", "version.buf.json")
 		if err != nil {
-			return nil, err
+			return nil, result, err
 		}
 		defer os.Remove(tempFile.Name())
 		os.Setenv(ENV_VAR_PREFIX, tempFile.Name())
 	}
 
-	err = f(ctx)
+	result, err = f(ctx)
 	if err != nil {
-		return nil, err
+		return nil, result, err
 	}
 
 	report, err := getMergedVersionReport()
 	if tempFile != nil {
 		os.Unsetenv(ENV_VAR_PREFIX)
 	}
-	return report, err
+	return report, result, err
 }
 
 func MustGenerate(ctx context.Context) bool {
