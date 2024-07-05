@@ -139,3 +139,11 @@ func WithVersionReportCapture(ctx context.Context, f func(ctx context.Context) e
 	}
 	return report, err
 }
+
+func MustGenerate(ctx context.Context) bool {
+	report, err := getMergedVersionReport()
+	if err != nil || report == nil {
+		return false
+	}
+	return report.MustGenerate()
+}
