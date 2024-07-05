@@ -75,7 +75,7 @@ func TestWithVersionReportCapture(t *testing.T) {
 	ctx := context.Background()
 
 	type unknown struct {}
-	report, _, err := WithVersionReportCapture[unknown](ctx, func(ctx context.Context) (*unknown, error) {
+	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
 		return nil, AddVersionReport(ctx, VersionReport{
 			Key:          "test",
 			Priority:     1,
@@ -92,17 +92,18 @@ func TestWithVersionReportCapture(t *testing.T) {
 
 func TestIntegrationWithSubprocesses(t *testing.T) {
 	ctx := context.Background()
+	type unknown struct {}
 
-	report, err := WithVersionReportCapture(ctx, func(ctx context.Context) error {
+	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
 		// Run two subprocesses that add version reports
 
 		for i := 0; i < 2; i++ {
 			err := execSubprocess(i, "original")
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
-		return execSubprocess(0, "overridden")
+		return nil, execSubprocess(0, "overridden")
 	})
 
 	require.NoError(t, err)
