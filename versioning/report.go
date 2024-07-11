@@ -12,12 +12,22 @@ import (
 	"sync"
 )
 
+type BumpType string
+
+const (
+	BumpMajor BumpType = "major"
+	BumpMinor BumpType = "minor"
+	BumpPatch BumpType = "patch"
+	BumpNone  BumpType = "none"
+)
+
 type VersionReport struct {
 	readIndex  int
-	Key          string `json:"key"`
-	Priority     int    `json:"priority"`
-	MustGenerate bool   `json:"must_generate"`
-	PRReport     string `json:"pr_report"`
+	Key          string   `json:"key"`
+	Priority     int      `json:"priority"`
+	BumpType     BumpType `json:"bump_type"`
+	MustGenerate bool     `json:"must_generate"`
+	PRReport     string   `json:"pr_report"`
 }
 
 const ENV_VAR_PREFIX = "SPEAKEASY_VERSION_REPORT_LOCATION"
