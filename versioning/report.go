@@ -22,7 +22,7 @@ const (
 )
 
 type VersionReport struct {
-	readIndex  int
+	readIndex    int
 	Key          string   `json:"key"`
 	Priority     int      `json:"priority"`
 	BumpType     BumpType `json:"bump_type"`

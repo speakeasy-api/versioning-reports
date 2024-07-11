@@ -26,7 +26,7 @@ func TestAddVersionReport(t *testing.T) {
 	report := VersionReport{
 		Key:          "test",
 		Priority:     1,
-		BumpType: BumpMinor,
+		BumpType:     BumpMinor,
 		MustGenerate: true,
 		PRReport:     "Test report",
 	}
@@ -75,7 +75,7 @@ func TestGetMergedVersionReport(t *testing.T) {
 func TestWithVersionReportCapture(t *testing.T) {
 	ctx := context.Background()
 
-	type unknown struct {}
+	type unknown struct{}
 	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
 		return nil, AddVersionReport(ctx, VersionReport{
 			Key:          "test",
@@ -93,7 +93,7 @@ func TestWithVersionReportCapture(t *testing.T) {
 
 func TestIntegrationWithSubprocesses(t *testing.T) {
 	ctx := context.Background()
-	type unknown struct {}
+	type unknown struct{}
 
 	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
 		// Run two subprocesses that add version reports
