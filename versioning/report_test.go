@@ -69,6 +69,7 @@ func TestGetMergedVersionReport(t *testing.T) {
 	assert.Len(t, mergedReport.Reports, 2)
 	assert.Equal(t, "test1", mergedReport.Reports[0].Key)
 	assert.Equal(t, "test2", mergedReport.Reports[1].Key)
+	assert.Equal(t, "Test report 1\nTest report 2\n", mergedReport.GetMarkdownSection())
 	assert.True(t, mergedReport.MustGenerate())
 }
 

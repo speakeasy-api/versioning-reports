@@ -82,6 +82,16 @@ func (m *MergedVersionReport) MustGenerate() bool {
 	return false
 }
 
+func (m *MergedVersionReport) GetMarkdownSection() string {
+	inner := ""
+	for _, report := range m.Reports {
+		if len(report.PRReport) > 0 {
+			inner += report.PRReport + "\n"
+		}
+	}
+	return inner
+}
+
 func getMergedVersionReport() (*MergedVersionReport, error) {
 	location := os.Getenv(ENV_VAR_PREFIX)
 	if len(location) == 0 {
