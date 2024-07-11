@@ -52,6 +52,9 @@ func AddVersionReport(ctx context.Context, report VersionReport) error {
 			return err
 		}
 		defer f.Close()
+		if report.BumpType == "" {
+			report.BumpType = BumpNone
+		}
 
 		bytes, err := json.Marshal(report)
 		if err != nil {
