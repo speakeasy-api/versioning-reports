@@ -15,10 +15,11 @@ import (
 type BumpType string
 
 const (
-	BumpMajor BumpType = "major"
-	BumpMinor BumpType = "minor"
-	BumpPatch BumpType = "patch"
-	BumpNone  BumpType = "none"
+	BumpMajor BumpType  = "major"
+	BumpMinor BumpType  = "minor"
+	BumpPatch BumpType  = "patch"
+	BumpCustom BumpType = "custom"
+	BumpNone  BumpType  = "none"
 )
 
 type VersionReport struct {
