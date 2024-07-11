@@ -26,6 +26,7 @@ func TestAddVersionReport(t *testing.T) {
 	report := VersionReport{
 		Key:          "test",
 		Priority:     1,
+		BumpType: BumpMinor,
 		MustGenerate: true,
 		PRReport:     "Test report",
 	}
