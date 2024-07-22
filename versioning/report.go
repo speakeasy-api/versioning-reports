@@ -29,6 +29,7 @@ type VersionReport struct {
 	Key          string   `json:"key"`
 	Priority     int      `json:"priority"`
 	BumpType     BumpType `json:"bump_type"`
+	NewVersion   string   `json:"new_version"`
 	MustGenerate bool     `json:"must_generate"`
 	PRReport     string   `json:"pr_report"`
 }
