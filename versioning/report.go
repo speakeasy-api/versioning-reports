@@ -18,6 +18,8 @@ const (
 	BumpMajor BumpType  = "major"
 	BumpMinor BumpType  = "minor"
 	BumpPatch BumpType  = "patch"
+	BumpGraduate BumpType  = "graduate"
+	BumpPrerelease BumpType  = "prerelease"
 	BumpCustom BumpType = "custom"
 	BumpNone  BumpType  = "none"
 )
