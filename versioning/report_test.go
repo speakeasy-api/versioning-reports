@@ -53,14 +53,13 @@ func TestAddVersionReportWithCommitReport(t *testing.T) {
 	defer os.Unsetenv(ENV_VAR_PREFIX)
 
 	ctx := context.Background()
-	commitReport := "Test commit report"
 	report := VersionReport{
 		Key:          "test_commit",
 		Priority:     1,
 		BumpType:     BumpMinor,
 		MustGenerate: true,
 		PRReport:     "Test report",
-		CommitReport: commitReport,
+		CommitReport: "Test commit report",
 	}
 
 	err = AddVersionReport(ctx, report)
@@ -74,7 +73,6 @@ func TestAddVersionReportWithCommitReport(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, report, readReport)
-	assert.Equal(t, commitReport, readReport.CommitReport)
 }
 
 func TestGetMergedVersionReport(t *testing.T) {
@@ -114,11 +112,9 @@ func TestGetMergedVersionReportWithCommitReports(t *testing.T) {
 	os.Setenv(ENV_VAR_PREFIX, tempFile.Name())
 	defer os.Unsetenv(ENV_VAR_PREFIX)
 
-	commitReport1 := "Test commit report 1"
-	commitReport2 := "Test commit report 2"
 	reports := []VersionReport{
-		{Key: "test1", Priority: 2, MustGenerate: true, PRReport: "Test report 1", CommitReport: commitReport1},
-		{Key: "test2", Priority: 1, MustGenerate: false, PRReport: "Test report 2", CommitReport: commitReport2},
+		{Key: "test1", Priority: 2, MustGenerate: true, PRReport: "Test report 1", CommitReport: "Test commit report 1"},
+		{Key: "test2", Priority: 1, MustGenerate: false, PRReport: "Test report 2", CommitReport: "Test commit report 2"},
 	}
 
 	for _, report := range reports {
@@ -146,10 +142,9 @@ func TestGetMergedVersionReportWithMixedCommitReports(t *testing.T) {
 	os.Setenv(ENV_VAR_PREFIX, tempFile.Name())
 	defer os.Unsetenv(ENV_VAR_PREFIX)
 
-	commitReport1 := "Test commit report 1"
 	// test2 has no commit report (empty string)
 	reports := []VersionReport{
-		{Key: "test1", Priority: 2, MustGenerate: true, PRReport: "Test report 1", CommitReport: commitReport1},
+		{Key: "test1", Priority: 2, MustGenerate: true, PRReport: "Test report 1", CommitReport: "Test commit report 1"},
 		{Key: "test2", Priority: 1, MustGenerate: false, PRReport: "Test report 2", CommitReport: ""},
 	}
 
@@ -223,14 +218,13 @@ func TestWithVersionReportCaptureWithCommitReport(t *testing.T) {
 	ctx := context.Background()
 
 	type unknown struct{}
-	commitReport := "Test commit report"
 	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
 		return nil, AddVersionReport(ctx, VersionReport{
 			Key:          "test_commit",
 			Priority:     1,
 			MustGenerate: true,
 			PRReport:     "Test report",
-			CommitReport: commitReport,
+			CommitReport: "Test commit report",
 		})
 	})
 
@@ -238,7 +232,7 @@ func TestWithVersionReportCaptureWithCommitReport(t *testing.T) {
 	assert.Len(t, report.Reports, 1)
 	assert.Equal(t, "test_commit", report.Reports[0].Key)
 	assert.True(t, report.MustGenerate())
-	assert.Equal(t, commitReport, report.Reports[0].CommitReport)
+	assert.Equal(t, "Test commit report", report.Reports[0].CommitReport)
 	assert.Equal(t, "Test commit report\n", report.GetCommitMarkdownSection())
 }
 
