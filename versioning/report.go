@@ -32,7 +32,7 @@ type VersionReport struct {
 	NewVersion   string   `json:"new_version"`
 	MustGenerate bool     `json:"must_generate"`
 	PRReport     string   `json:"pr_report"`
-	CommitReport *string  `json:"commit_report"`
+	CommitReport string   `json:"commit_report"`
 }
 
 const ENV_VAR_PREFIX = "SPEAKEASY_VERSION_REPORT_LOCATION"
@@ -99,8 +99,8 @@ func (m *MergedVersionReport) GetMarkdownSection() string {
 func (m *MergedVersionReport) GetCommitMarkdownSection() string {
 	inner := ""
 	for _, report := range m.Reports {
-		if report.CommitReport != nil && len(*report.CommitReport) > 0 {
-			inner += *report.CommitReport + "\n"
+		if len(report.CommitReport) > 0 {
+			inner += report.CommitReport + "\n"
 		}
 	}
 	return inner
