@@ -15,13 +15,13 @@ import (
 type BumpType string
 
 const (
-	BumpMajor BumpType  = "major"
-	BumpMinor BumpType  = "minor"
-	BumpPatch BumpType  = "patch"
-	BumpGraduate BumpType  = "graduate"
-	BumpPrerelease BumpType  = "prerelease"
-	BumpCustom BumpType = "custom"
-	BumpNone  BumpType  = "none"
+	BumpMajor      BumpType = "major"
+	BumpMinor      BumpType = "minor"
+	BumpPatch      BumpType = "patch"
+	BumpGraduate   BumpType = "graduate"
+	BumpPrerelease BumpType = "prerelease"
+	BumpCustom     BumpType = "custom"
+	BumpNone       BumpType = "none"
 )
 
 type VersionReport struct {
@@ -32,6 +32,7 @@ type VersionReport struct {
 	NewVersion   string   `json:"new_version"`
 	MustGenerate bool     `json:"must_generate"`
 	PRReport     string   `json:"pr_report"`
+	CommitReport string   `json:"commit_report"`
 }
 
 const ENV_VAR_PREFIX = "SPEAKEASY_VERSION_REPORT_LOCATION"
@@ -93,6 +94,17 @@ func (m *MergedVersionReport) GetMarkdownSection() string {
 		}
 	}
 	return inner
+}
+
+func (m *MergedVersionReport) GetCommitMarkdownSection() string {
+	inner := ""
+	for _, report := range m.Reports {
+		if len(report.CommitReport) > 0 {
+			inner += report.CommitReport + "\n"
+		}
+	}
+	return inner
+
 }
 
 func getMergedVersionReport() (*MergedVersionReport, error) {
