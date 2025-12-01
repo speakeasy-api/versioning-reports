@@ -35,6 +35,58 @@ type VersionReport struct {
 	CommitReport string   `json:"commit_report"`
 }
 
+// VersionReportV2Data is the top-level container for V2 changelog data.
+// It stores structured change information for all targets in a single generation run.
+// This enables more flexible changelog rendering with support for multiple targets
+// and future features like commit templates.
+type VersionReportV2Data struct {
+	Targets []VersionReportV2Target `json:"targets"`
+}
+
+// VersionReportV2Target represents the changes made to a single SDK target.
+type VersionReportV2Target struct {
+	TargetName      string                     `json:"target_name"`                // e.g., "typescript", "go", "python"
+	PackageName     string                     `json:"package_name,omitempty"`     // e.g., "@vercel/sdk", "github.com/vercel/sdk-go"
+	PreviousVersion string                     `json:"previous_version,omitempty"` // e.g., "1.23.7"
+	NewVersion      string                     `json:"new_version"`                // e.g., "1.23.8"
+	GeneratedAt     string                     `json:"generated_at,omitempty"`     // ISO8601 timestamp
+	Operations      []VersionReportV2Operation `json:"operations"`                 // List of changed operations
+}
+
+// VersionReportV2OperationType indicates what kind of change happened to an operation.
+type VersionReportV2OperationType string
+
+const (
+	OperationAdded      VersionReportV2OperationType = "added"
+	OperationRemoved    VersionReportV2OperationType = "removed"
+	OperationModified   VersionReportV2OperationType = "modified"
+	OperationDeprecated VersionReportV2OperationType = "deprecated"
+)
+
+// VersionReportV2Operation represents changes to a single SDK operation/method.
+type VersionReportV2Operation struct {
+	Name       string                       `json:"name"`        // e.g., "sdk.createUser()", "Sdk.Inner.ComplexOperation()"
+	Type       VersionReportV2OperationType `json:"type"`        // added, removed, modified, deprecated
+	IsBreaking bool                         `json:"is_breaking"` // true if any child change is breaking
+	Changes    []VersionReportV2FieldChange `json:"changes"`     // list of field-level changes (empty for added/removed operations)
+}
+
+// VersionReportV2FieldChangeType indicates what kind of change happened to a field.
+type VersionReportV2FieldChangeType string
+
+const (
+	FieldAdded   VersionReportV2FieldChangeType = "added"
+	FieldRemoved VersionReportV2FieldChangeType = "removed"
+	FieldChanged VersionReportV2FieldChangeType = "changed"
+)
+
+// VersionReportV2FieldChange represents a single field-level change within an operation.
+type VersionReportV2FieldChange struct {
+	Path       string                         `json:"path"`        // e.g., "request.email", "response.data.items"
+	Type       VersionReportV2FieldChangeType `json:"type"`        // added, removed, changed
+	IsBreaking bool                           `json:"is_breaking"` // true if this specific change is breaking
+}
+
 const ENV_VAR_PREFIX = "SPEAKEASY_VERSION_REPORT_LOCATION"
 
 var fileMutex sync.Mutex
@@ -154,7 +206,13 @@ func getMergedVersionReport() (*MergedVersionReport, error) {
 	return &MergedVersionReport{Reports: orderedReports}, nil
 }
 
-func WithVersionReportCapture[T any](ctx context.Context, f func(ctx context.Context) (T, error)) (*MergedVersionReport, T, error) {
+// VersionReportCapture holds both V1 and V2 version reports.
+type VersionReportCapture struct {
+	V1 *MergedVersionReport
+	V2 *VersionReportV2Data
+}
+
+func WithVersionReportCapture[T any](ctx context.Context, f func(ctx context.Context) (T, error)) (*VersionReportCapture, T, error) {
 	var tempFile *os.File
 	var err error
 	var result T
@@ -166,6 +224,12 @@ func WithVersionReportCapture[T any](ctx context.Context, f func(ctx context.Con
 		}
 		defer os.Remove(tempFile.Name())
 		os.Setenv(ENV_VAR_PREFIX, tempFile.Name())
+
+		// Also clean up the V2 file that will be created
+		v2Location := getV2Location()
+		if len(v2Location) > 0 {
+			defer os.Remove(v2Location)
+		}
 	}
 
 	result, err = f(ctx)
@@ -174,10 +238,21 @@ func WithVersionReportCapture[T any](ctx context.Context, f func(ctx context.Con
 	}
 
 	report, err := getMergedVersionReport()
+	reportV2, errV2 := GetVersionReportV2()
+
 	if tempFile != nil {
 		os.Unsetenv(ENV_VAR_PREFIX)
 	}
-	return report, result, err
+
+	// Prioritize the function error, then V1 report error, then V2 report error
+	if err != nil {
+		return nil, result, err
+	}
+	if errV2 != nil {
+		return nil, result, errV2
+	}
+
+	return &VersionReportCapture{V1: report, V2: reportV2}, result, nil
 }
 
 func MustGenerate(ctx context.Context) bool {
@@ -186,4 +261,101 @@ func MustGenerate(ctx context.Context) bool {
 		return false
 	}
 	return report.MustGenerate()
+}
+
+// V2 Report Functions
+// These functions provide structured changelog storage and rendering,
+// running alongside V1 for backwards compatibility.
+
+var v2FileMutex sync.Mutex
+
+// getV2Location derives the V2 report file location from the V1 location.
+// If the V1 location is "/path/to/version.json", the V2 location will be "/path/to/version.v2.json".
+// Returns empty string if the V1 environment variable is not set.
+func getV2Location() string {
+	v1Location := os.Getenv(ENV_VAR_PREFIX)
+	if len(v1Location) == 0 {
+		return ""
+	}
+
+	// Append .v2 before the file extension
+	// e.g., "/path/to/version.json" -> "/path/to/version.v2.json"
+	if len(v1Location) > 5 && v1Location[len(v1Location)-5:] == ".json" {
+		return v1Location[:len(v1Location)-5] + ".v2.json"
+	}
+	// Fallback: just append .v2 to the end
+	return v1Location + ".v2"
+}
+
+// AddVersionReportV2Target appends a single target's changelog data to the V2 report file.
+// Multiple calls with different targets will accumulate in the same file.
+// Returns nil if the V1 environment variable is not set (graceful degradation).
+func AddVersionReportV2Target(ctx context.Context, target VersionReportV2Target) error {
+	location := getV2Location()
+	if len(location) == 0 {
+		// V1 not configured, silently skip (backwards compatible)
+		return nil
+	}
+
+	v2FileMutex.Lock()
+	defer v2FileMutex.Unlock()
+
+	f, err := os.OpenFile(location, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open V2 report file: %w", err)
+	}
+	defer f.Close()
+
+	data, err := json.Marshal(target)
+	if err != nil {
+		return fmt.Errorf("failed to marshal V2 target: %w", err)
+	}
+
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		return fmt.Errorf("failed to write V2 target: %w", err)
+	}
+
+	return nil
+}
+
+// GetVersionReportV2 reads all V2 target reports from the file and returns them
+// as a VersionReportV2Data struct. Returns nil if the file doesn't exist or
+// the V1 environment variable is not set.
+func GetVersionReportV2() (*VersionReportV2Data, error) {
+	location := getV2Location()
+	if len(location) == 0 {
+		return nil, nil // V1 not configured
+	}
+
+	v2FileMutex.Lock()
+	defer v2FileMutex.Unlock()
+
+	contents, err := os.ReadFile(location)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // File doesn't exist, not an error
+		}
+		return nil, fmt.Errorf("failed to read V2 report file: %w", err)
+	}
+
+	if len(contents) == 0 {
+		return nil, nil // Empty file
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(contents))
+	targets := make([]VersionReportV2Target, 0)
+
+	for decoder.More() {
+		var target VersionReportV2Target
+		if err := decoder.Decode(&target); err != nil {
+			return nil, fmt.Errorf("failed to decode V2 target: %w", err)
+		}
+		targets = append(targets, target)
+	}
+
+	if len(targets) == 0 {
+		return nil, nil
+	}
+
+	return &VersionReportV2Data{Targets: targets}, nil
 }
