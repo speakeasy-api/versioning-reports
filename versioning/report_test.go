@@ -199,7 +199,7 @@ func TestWithVersionReportCapture(t *testing.T) {
 	ctx := context.Background()
 
 	type unknown struct{}
-	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
+	versionReports, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
 		return nil, AddVersionReport(ctx, VersionReport{
 			Key:          "test",
 			Priority:     1,
@@ -209,16 +209,18 @@ func TestWithVersionReportCapture(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Len(t, report.Reports, 1)
-	assert.Equal(t, "test", report.Reports[0].Key)
-	assert.True(t, report.MustGenerate())
+	require.NotNil(t, versionReports)
+	require.NotNil(t, versionReports.V1)
+	assert.Len(t, versionReports.V1.Reports, 1)
+	assert.Equal(t, "test", versionReports.V1.Reports[0].Key)
+	assert.True(t, versionReports.V1.MustGenerate())
 }
 
 func TestWithVersionReportCaptureWithCommitReport(t *testing.T) {
 	ctx := context.Background()
 
 	type unknown struct{}
-	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
+	versionReports, _, err := WithVersionReportCapture(ctx, func(ctx context.Context) (*unknown, error) {
 		return nil, AddVersionReport(ctx, VersionReport{
 			Key:          "test_commit",
 			Priority:     1,
@@ -229,18 +231,20 @@ func TestWithVersionReportCaptureWithCommitReport(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Len(t, report.Reports, 1)
-	assert.Equal(t, "test_commit", report.Reports[0].Key)
-	assert.True(t, report.MustGenerate())
-	assert.Equal(t, "Test commit report", report.Reports[0].CommitReport)
-	assert.Equal(t, "Test commit report\n", report.GetCommitMarkdownSection())
+	require.NotNil(t, versionReports)
+	require.NotNil(t, versionReports.V1)
+	assert.Len(t, versionReports.V1.Reports, 1)
+	assert.Equal(t, "test_commit", versionReports.V1.Reports[0].Key)
+	assert.True(t, versionReports.V1.MustGenerate())
+	assert.Equal(t, "Test commit report", versionReports.V1.Reports[0].CommitReport)
+	assert.Equal(t, "Test commit report\n", versionReports.V1.GetCommitMarkdownSection())
 }
 
 func TestIntegrationWithSubprocesses(t *testing.T) {
 	ctx := context.Background()
 	type unknown struct{}
 
-	report, _, err := WithVersionReportCapture[*unknown](ctx, func(ctx context.Context) (*unknown, error) {
+	versionReports, _, err := WithVersionReportCapture(ctx, func(ctx context.Context) (*unknown, error) {
 		// Run two subprocesses that add version reports
 
 		for i := 0; i < 2; i++ {
@@ -253,12 +257,14 @@ func TestIntegrationWithSubprocesses(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Len(t, report.Reports, 2)
-	assert.Equal(t, "subprocess1", report.Reports[0].Key)
-	assert.Equal(t, "overridden", report.Reports[0].PRReport)
-	assert.Equal(t, "subprocess2", report.Reports[1].Key)
-	assert.Equal(t, "original", report.Reports[1].PRReport)
-	assert.True(t, report.MustGenerate())
+	require.NotNil(t, versionReports)
+	require.NotNil(t, versionReports.V1)
+	assert.Len(t, versionReports.V1.Reports, 2)
+	assert.Equal(t, "subprocess1", versionReports.V1.Reports[0].Key)
+	assert.Equal(t, "overridden", versionReports.V1.Reports[0].PRReport)
+	assert.Equal(t, "subprocess2", versionReports.V1.Reports[1].Key)
+	assert.Equal(t, "original", versionReports.V1.Reports[1].PRReport)
+	assert.True(t, versionReports.V1.MustGenerate())
 }
 
 func execSubprocess(i int, extra string) error {
@@ -269,4 +275,138 @@ func execSubprocess(i int, extra string) error {
 		return err
 	}
 	return nil
+}
+
+// V2 Tests
+
+func TestAddVersionReportV2Target(t *testing.T) {
+	tempFile, err := os.CreateTemp("", "test_v1_report.json")
+	require.NoError(t, err)
+	defer os.Remove(tempFile.Name())
+
+	// Set V1 location, which will derive the V2 location
+	os.Setenv(ENV_VAR_PREFIX, tempFile.Name())
+	defer os.Unsetenv(ENV_VAR_PREFIX)
+
+	// Calculate V2 location and ensure cleanup
+	v2Location := getV2Location()
+	defer os.Remove(v2Location)
+
+	ctx := context.Background()
+	target := VersionReportV2Target{
+		TargetName:      "typescript",
+		PackageName:     "@vercel/sdk",
+		PreviousVersion: "1.23.7",
+		NewVersion:      "1.23.8",
+		Operations: []VersionReportV2Operation{
+			{
+				Name:       "sdk.createUser()",
+				Type:       OperationModified,
+				IsBreaking: true,
+				Changes: []VersionReportV2FieldChange{
+					{Path: "request.email", Type: FieldAdded, IsBreaking: false},
+					{Path: "response", Type: FieldChanged, IsBreaking: true},
+				},
+			},
+		},
+	}
+
+	err = AddVersionReportV2Target(ctx, target)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(v2Location)
+	require.NoError(t, err)
+
+	var readTarget VersionReportV2Target
+	err = json.Unmarshal(content, &readTarget)
+	require.NoError(t, err)
+
+	assert.Equal(t, target.TargetName, readTarget.TargetName)
+	assert.Equal(t, target.PackageName, readTarget.PackageName)
+	assert.Equal(t, target.NewVersion, readTarget.NewVersion)
+	assert.Len(t, readTarget.Operations, 1)
+	assert.Len(t, readTarget.Operations[0].Changes, 2)
+}
+
+func TestAddVersionReportV2Target_NoEnvVar(t *testing.T) {
+	// Ensure V1 env var is not set
+	os.Unsetenv(ENV_VAR_PREFIX)
+
+	ctx := context.Background()
+	target := VersionReportV2Target{
+		TargetName: "typescript",
+		NewVersion: "1.0.0",
+	}
+
+	// Should succeed silently when V1 env var is not set
+	err := AddVersionReportV2Target(ctx, target)
+	assert.NoError(t, err)
+}
+
+func TestGetVersionReportV2(t *testing.T) {
+	tempFile, err := os.CreateTemp("", "test_v1_get_report.json")
+	require.NoError(t, err)
+	defer os.Remove(tempFile.Name())
+
+	// Set V1 location, which will derive the V2 location
+	os.Setenv(ENV_VAR_PREFIX, tempFile.Name())
+	defer os.Unsetenv(ENV_VAR_PREFIX)
+
+	// Calculate V2 location and ensure cleanup
+	v2Location := getV2Location()
+	defer os.Remove(v2Location)
+
+	targets := []VersionReportV2Target{
+		{
+			TargetName:  "typescript",
+			PackageName: "@vercel/sdk",
+			NewVersion:  "1.23.8",
+			Operations: []VersionReportV2Operation{
+				{Name: "sdk.createUser()", Type: OperationModified, IsBreaking: false},
+			},
+		},
+		{
+			TargetName: "go",
+			NewVersion: "1.9.2",
+			Operations: []VersionReportV2Operation{
+				{Name: "Sdk.Inner.ComplexOperation()", Type: OperationModified, IsBreaking: true},
+			},
+		},
+	}
+
+	// Write directly to the V2 location
+	v2File, err := os.OpenFile(v2Location, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	for _, target := range targets {
+		bytes, _ := json.Marshal(target)
+		v2File.Write(append(bytes, '\n'))
+	}
+	v2File.Close()
+
+	data, err := GetVersionReportV2()
+	require.NoError(t, err)
+	require.NotNil(t, data)
+
+	assert.Len(t, data.Targets, 2)
+	assert.Equal(t, "typescript", data.Targets[0].TargetName)
+	assert.Equal(t, "go", data.Targets[1].TargetName)
+}
+
+func TestGetVersionReportV2_NoEnvVar(t *testing.T) {
+	// Ensure V1 env var is not set
+	os.Unsetenv(ENV_VAR_PREFIX)
+
+	data, err := GetVersionReportV2()
+	assert.NoError(t, err)
+	assert.Nil(t, data)
+}
+
+func TestGetVersionReportV2_FileNotExist(t *testing.T) {
+	// Set V1 location to a path where V2 file doesn't exist
+	os.Setenv(ENV_VAR_PREFIX, "/nonexistent/path/file.json")
+	defer os.Unsetenv(ENV_VAR_PREFIX)
+
+	data, err := GetVersionReportV2()
+	assert.NoError(t, err)
+	assert.Nil(t, data)
 }
